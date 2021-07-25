@@ -1,0 +1,4 @@
+/.DS_Store
+/export_creds.sh
+/terraform.tfstate*
+.terraform
