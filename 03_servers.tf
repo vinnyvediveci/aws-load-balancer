@@ -1,66 +1,5 @@
 
 
-provider "aws" {
-  // access_key = "${var.access_key}"
-  // secret_key = "${var.secret_key}"
-  region = var.region
-}
-
-resource "aws_vpc" "test" {
-  cidr_block           = "10.0.0.0/16"
-  enable_dns_hostnames = true
-  tags = {
-    Name = "load balancer test"
-  }
-}
-
-resource "aws_internet_gateway" "gw" {
-  vpc_id = aws_vpc.test.id
-}
-
-resource "aws_subnet" "testa" {
-  vpc_id                  = aws_vpc.test.id
-  cidr_block              = "10.0.1.0/24"
-  availability_zone       = "eu-west-2a"
-  map_public_ip_on_launch = true
-  tags = {
-    Name = "test A"
-  }
-}
-
-resource "aws_subnet" "testb" {
-  vpc_id                  = aws_vpc.test.id
-  cidr_block              = "10.0.2.0/24"
-  availability_zone       = "eu-west-2b"
-  map_public_ip_on_launch = true
-  tags = {
-    Name = "test B"
-  }
-}
-
-resource "aws_route_table" "test_route" {
-  vpc_id = aws_vpc.test.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.gw.id
-  }
-
-  tags = {
-    Name = "new route table"
-  }
-}
-
-resource "aws_route_table_association" "a" {
-  subnet_id      = aws_subnet.testa.id
-  route_table_id = aws_route_table.test_route.id
-}
-
-resource "aws_route_table_association" "b" {
-  subnet_id      = aws_subnet.testb.id
-  route_table_id = aws_route_table.test_route.id
-}
-
 resource "aws_security_group" "basic" {
   name   = "basic"
   vpc_id = aws_vpc.test.id
@@ -93,14 +32,11 @@ resource "aws_security_group" "basic" {
 }
 
 
-//  servers 
-
-
-resource "aws_instance" "server1" {
+resource "aws_instance" "server_1" {
   ami               = var.ami
   instance_type     = var.instance_type
-  availability_zone = "eu-west-2a"
-  subnet_id         = aws_subnet.testa.id
+  availability_zone = var.availability_zones[0]
+  subnet_id         = aws_subnet.subnet_a.id
   key_name          = "terraform"
   security_groups   = [aws_security_group.basic.id]
 
@@ -126,13 +62,13 @@ resource "aws_instance" "server1" {
   }
 }
 
-resource "aws_instance" "server2" {
-  depends_on        = [aws_instance.server1]
+resource "aws_instance" "server_2" {
+  depends_on        = [aws_instance.server_1]
   ami               = var.ami
   instance_type     = var.instance_type
-  availability_zone = "eu-west-2b"
-  subnet_id         = aws_subnet.testb.id
-  key_name          = "terraform"
+  availability_zone = var.availability_zones[1]
+  subnet_id         = aws_subnet.subnet_b.id
+  key_name          = var.key_name
   security_groups   = [aws_security_group.basic.id]
 
   connection {
@@ -156,9 +92,11 @@ resource "aws_instance" "server2" {
   }
 }
 
+
+
 resource "aws_elb" "test_load_balancer" {
 
-  subnets         = [aws_subnet.testa.id, aws_subnet.testb.id]
+  subnets         = [aws_subnet.subnet_a.id, aws_subnet.subnet_b.id]
   security_groups = [aws_security_group.basic.id]
   listener {
     instance_port     = 80
@@ -176,7 +114,7 @@ resource "aws_elb" "test_load_balancer" {
   }
 
 
-  instances                   = [aws_instance.server1.id, aws_instance.server2.id]
+  instances                   = [aws_instance.server_1.id, aws_instance.server_2.id]
   cross_zone_load_balancing   = true
   idle_timeout                = 400
   connection_draining         = true
